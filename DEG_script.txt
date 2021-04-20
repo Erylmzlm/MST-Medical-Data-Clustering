@@ -1,0 +1,45 @@
+library(DESeq2)
+library(edgeR)
+library(limma)
+library(Biobase)
+
+load('bottomly_eset.RData')
+
+## edgeR ##
+# Design matrix
+design.mat <- model.matrix(~ 0 + dge$samples$group)
+colnames(design.mat) <- c("C57BL", "DBA")
+# Model fitting
+fit.edgeR <- glmFit(dge, design.mat)
+# Differential expression
+contrasts.edgeR <- makeContrasts(C57BL - DBA, levels=design.mat)
+lrt.edgeR <- glmLRT(fit.edgeR, contrast=contrasts.edgeR)
+# Access results tables
+edgeR_results <- lrt.edgeR$table
+sig.edgeR <- decideTestsDGE(lrt.edgeR, adjust.method="BH", p.value = p.threshold)
+genes.edgeR <- row.names(edgeR_results)[which(sig.edgeR != 0)]
+
+### limma-voom
+For limma-voom we are taking our voom transformations and using that matrix as input to normal-based limma functions 
+that we would use on microarray data. **Plot a histogram of your transformed data and you should see that it is normally distributed.
+** The steps that follow are: i) fitting the linear model given the factor of interest and ii) compute moderated statistics based on 
+empirical Bayes moderation of the standard errors towards a common value.
+
+```{r}
+## voom-limma ##
+# Create design matrix
+design <- model.matrix(~ pData(bottomly.eset)$strain)
+# Usual limma pipeline
+# fit a linear model
+#--------------------------------------------
+#fit <- lmFit(y,design)
+#fit <- eBayes(fit)
+
+# output predictive log fold changes for first 5 genes
+#pfc <- predFCm(fit,coef=2)
+#--------------------------------------------
+fit.voom <- lmFit(v, design)
+fit.voom <- eBayes(fit.voom)
+voom_results <- topTable(fit.voom, coef=2,  adjust="BH", number = nrow(exprs(bottomly.eset)))
+voom_results$threshold <- as.logical(voom_results$adj.P.Val < p.threshold)
+genes.voom <- row.names(voom_results)[which(voom_results$threshold)]
